@@ -2451,6 +2451,7 @@ int lct_set_prop_input_suspend(struct smb_charger *chg,
 	union power_supply_propval pval = {0, };
 
 	pr_err("[%s] val=%d\n", __func__, val->intval);
+	chg->charging_enabled = !!val->intval;
 	if (val->intval) {
 		pval.intval = 0;
 		smblib_set_prop_input_suspend(chg, &pval);
