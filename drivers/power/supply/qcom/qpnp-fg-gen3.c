@@ -959,21 +959,12 @@ static int fg_get_batt_profile(struct fg_dev *fg)
 		fg->bp.vbatt_full_mv = -EINVAL;
 	}
 
-#ifdef CONFIG_MACH_XIAOMI_CLOVER
 	rc = of_property_read_u32(profile_node, "qcom,nom-batt-capacity-mah",
 			&fg->bp.batt_capacity_mah);
 	if (rc < 0) {
 		pr_err("battery capacity mah unavailable, rc:%d\n", rc);
 		fg->bp.batt_capacity_mah = -EINVAL;
 	}
-#else
-        rc = of_property_read_u32(profile_node, "qcom,fg-cc-cv-threshold-mv",
-                        &fg->bp.vbatt_full_mv);
-        if (rc < 0) {
-                pr_err("battery cc_cv threshold unavailable, rc:%d\n", rc);
-                fg->bp.vbatt_full_mv = -EINVAL;
-        }
-#endif
 
 	data = of_get_property(profile_node, "qcom,fg-profile-data", &len);
 	if (!data) {
@@ -3882,11 +3873,16 @@ static int fg_psy_get_property(struct power_supply *psy,
 		rc = fg_get_sram_prop(fg, FG_SRAM_OCV, &pval->intval);
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-#ifdef CONFIG_MACH_XIAOMI_CLOVER
-		pval->intval = fg->bp.batt_capacity_mah * 1000;
-#else
-		pval->intval = chip->cl.nom_cap_uah;
+		if (chip->cl.nom_cap_uah > 0)
+			pval->intval = chip->cl.nom_cap_uah;
+		else if (fg->bp.batt_capacity_mah > 0)
+			pval->intval = fg->bp.batt_capacity_mah * 1000;
+#ifdef CONFIG_MACH_LONGCHEER
+		else if (fg->battery_full_design > 0)
+			pval->intval = fg->battery_full_design * 1000;
 #endif
+		else
+			pval->intval = 4000 * 1000;
 		break;
 	case POWER_SUPPLY_PROP_RESISTANCE_ID:
 		pval->intval = fg->batt_id_ohms;
@@ -3910,7 +3906,18 @@ static int fg_psy_get_property(struct power_supply *psy,
 		pval->intval = chip->cl.init_cc_uah;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
-		pval->intval = chip->cl.learned_cc_uah;
+		if (chip->cl.learned_cc_uah > 0)
+			pval->intval = chip->cl.learned_cc_uah;
+		else if (chip->cl.nom_cap_uah > 0)
+			pval->intval = chip->cl.nom_cap_uah;
+		else if (fg->bp.batt_capacity_mah > 0)
+			pval->intval = fg->bp.batt_capacity_mah * 1000;
+#ifdef CONFIG_MACH_LONGCHEER
+		else if (fg->battery_full_design > 0)
+			pval->intval = fg->battery_full_design * 1000;
+#endif
+		else
+			pval->intval = 4000 * 1000;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
 		rc = fg_get_charge_counter(fg, &pval->intval);

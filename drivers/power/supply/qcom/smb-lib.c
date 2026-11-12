@@ -2400,17 +2400,26 @@ int smblib_get_prop_battery_full_design(struct smb_charger *chg,
 {
 	struct fg_dev *chip;
 
-	if (!chg->bms_psy)
-		return -EINVAL;
+	if (!chg->bms_psy) {
+		val->intval = 4000 * 1000;
+		return 0;
+	}
 	chip = power_supply_get_drvdata(chg->bms_psy);
-	if (chip->battery_full_design)
-#if defined(CONFIG_MACH_XIAOMI_LAVENDER)
-		val->intval = chip->battery_full_design * 1000;
-#else
-		val->intval = chip->battery_full_design;
-#endif
-	else
-		val->intval = 4000;
+	if (!chip) {
+		val->intval = 4000 * 1000;
+		return 0;
+	}
+
+	if (chip->battery_full_design > 0) {
+		if (chip->battery_full_design < 10000)
+			val->intval = chip->battery_full_design * 1000;
+		else
+			val->intval = chip->battery_full_design;
+	} else if (chip->bp.batt_capacity_mah > 0) {
+		val->intval = chip->bp.batt_capacity_mah * 1000;
+	} else {
+		val->intval = 4000 * 1000;
+	}
 	return 0;
 }
 #endif
