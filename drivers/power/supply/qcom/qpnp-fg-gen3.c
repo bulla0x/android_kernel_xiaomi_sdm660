@@ -2453,6 +2453,48 @@ static void restore_cycle_counter(struct fg_dev *fg)
 	mutex_unlock(&chip->cyc_ctr.lock);
 }
 
+static void fg_cycle_counter_restore_or_init(struct fg_dev *fg)
+{
+	struct fg_gen3_chip *chip = container_of(fg, struct fg_gen3_chip, fg);
+	int rc = 0, i, base_cycles = 1;
+	bool all_zero = true;
+	u8 data[2];
+
+	if (!chip->cyc_ctr.en)
+		return;
+
+	restore_cycle_counter(fg);
+
+	mutex_lock(&chip->cyc_ctr.lock);
+	for (i = 0; i < BUCKET_COUNT; i++) {
+		if (chip->cyc_ctr.count[i] > 0) {
+			all_zero = false;
+			break;
+		}
+	}
+
+	if (all_zero) {
+		if (chip->cl.learned_cc_uah > 0 &&
+		    chip->cl.nom_cap_uah > chip->cl.learned_cc_uah) {
+			int loss_uah = chip->cl.nom_cap_uah - chip->cl.learned_cc_uah;
+			base_cycles = loss_uah / 1333;
+			if (base_cycles < 1)
+				base_cycles = 1;
+		}
+		for (i = 0; i < BUCKET_COUNT; i++) {
+			chip->cyc_ctr.count[i] = base_cycles;
+			data[0] = base_cycles & 0xFF;
+			data[1] = (base_cycles >> 8) & 0xFF;
+			rc = fg_sram_write(fg, CYCLE_COUNT_WORD + (i / 2),
+					CYCLE_COUNT_OFFSET + (i % 2) * 2, data, 2,
+					FG_IMA_DEFAULT);
+			if (rc < 0)
+				pr_err("failed to write initial bucket %d rc=%d\n", i, rc);
+		}
+	}
+	mutex_unlock(&chip->cyc_ctr.lock);
+}
+
 static void clear_cycle_counter(struct fg_dev *fg)
 {
 	struct fg_gen3_chip *chip = container_of(fg, struct fg_gen3_chip, fg);
@@ -2534,6 +2576,17 @@ static void fg_cycle_counter_update(struct fg_dev *fg)
 			chip->cyc_ctr.started[bucket] = true;
 			chip->cyc_ctr.last_soc[bucket] = batt_soc;
 		}
+		for (i = 0; i < bucket; i++) {
+			if (chip->cyc_ctr.started[i] &&
+				batt_soc > chip->cyc_ctr.last_soc[i] + 2) {
+				rc = fg_inc_store_cycle_ctr(fg, i);
+				if (rc < 0)
+					pr_err("Error in storing cycle_ctr rc: %d\n",
+						rc);
+				chip->cyc_ctr.last_soc[i] = 0;
+				chip->cyc_ctr.started[i] = false;
+			}
+		}
 	} else if (fg->charge_done || !is_input_present(fg)) {
 		for (i = 0; i < BUCKET_COUNT; i++) {
 			if (chip->cyc_ctr.started[i] &&
@@ -2557,10 +2610,10 @@ out:
 static int fg_get_cycle_count(struct fg_dev *fg)
 {
 	struct fg_gen3_chip *chip = container_of(fg, struct fg_gen3_chip, fg);
-	int i, len = 0;
+	int i, len = 0, count;
 
 	if (!chip->cyc_ctr.en)
-		return 0;
+		return 1;
 
 	mutex_lock(&chip->cyc_ctr.lock);
 	for (i = 0; i < BUCKET_COUNT; i++)
@@ -2568,9 +2621,21 @@ static int fg_get_cycle_count(struct fg_dev *fg)
 
 	mutex_unlock(&chip->cyc_ctr.lock);
 
-	len = len / BUCKET_COUNT;
+	count = len / BUCKET_COUNT;
+	if (count <= 0) {
+		if (len > 0)
+			count = 1;
+		else if (chip->cl.learned_cc_uah > 0 &&
+			 chip->cl.nom_cap_uah > chip->cl.learned_cc_uah) {
+			count = (chip->cl.nom_cap_uah - chip->cl.learned_cc_uah) / 1333;
+			if (count <= 0)
+				count = 1;
+		} else {
+			count = 1;
+		}
+	}
 
-	return len;
+	return count;
 }
 
 static const char *fg_get_cycle_counts(struct fg_dev *fg)
@@ -3033,7 +3098,11 @@ static void profile_load_work(struct work_struct *work)
 	if (!is_profile_load_required(fg))
 		goto done;
 
-	clear_cycle_counter(fg);
+	/*
+	 * Do not clear cycle counter on profile reload,
+	 * as it wipes accumulated battery cycle counts across reboots.
+	 */
+	/* clear_cycle_counter(fg); */
 	mutex_lock(&chip->cl.lock);
 	chip->cl.learned_cc_uah = 0;
 	chip->cl.active = false;
@@ -3090,6 +3159,8 @@ done:
 			pr_err("Error in loading capacity learning data, rc:%d\n",
 				rc);
 	}
+
+	fg_cycle_counter_restore_or_init(fg);
 
 	rc = fg_rconn_config(fg);
 	if (rc < 0)
@@ -5414,6 +5485,7 @@ static int fg_parse_dt(struct fg_gen3_chip *chip)
 	}
 
 	chip->cyc_ctr.en = of_property_read_bool(node, "qcom,cycle-counter-en");
+	chip->cyc_ctr.en = true;
 
 	chip->dt.force_load_profile = of_property_read_bool(node,
 					"qcom,fg-force-load-profile");
