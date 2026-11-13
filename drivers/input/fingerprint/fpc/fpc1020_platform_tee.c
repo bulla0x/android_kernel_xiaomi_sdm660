@@ -489,7 +489,7 @@ exit_2:
 exit_1:
 		(void)vreg_setup(fpc1020, "vcc_spi", false);
 exit:
-#elif CONFIG_MACH_XIAOMI_SDM660
+#elif defined(CONFIG_MACH_XIAOMI_SDM660)
 #ifndef CONFIG_MACH_MI
 		(void)vreg_setup(fpc1020, "vdd_io", false);
 exit_1:
