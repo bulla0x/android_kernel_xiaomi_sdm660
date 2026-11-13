@@ -440,7 +440,7 @@ static inline int device_prepare(struct fpc1020_data *fpc1020, bool enable)
 
 		dev_dbg(dev, "requested irq %d\n", gpio_to_irq(fpc1020->irq_gpio));
                 
-                irq_set_irq_type(gpio_to_irq(fpc1020->irq_gpio), IRQ_TYPE_EDGE_BOTH);
+                irq_set_irq_type(gpio_to_irq(fpc1020->irq_gpio), IRQ_TYPE_EDGE_RISING);
 		/* Request that the interrupt should be wakeable */
 		enable_irq_wake(gpio_to_irq(fpc1020->irq_gpio));
 #endif
@@ -688,7 +688,7 @@ static ssize_t compatible_all_set(struct device *dev, struct device_attribute *a
 		dev_dbg(dev, "requested irq %d\n", gpio_to_irq(fpc1020->irq_gpio));
 
 		/* Request that the interrupt should be wakeable */
-                irq_set_irq_type(gpio_to_irq(fpc1020->irq_gpio), IRQ_TYPE_EDGE_BOTH);
+                irq_set_irq_type(gpio_to_irq(fpc1020->irq_gpio), IRQ_TYPE_EDGE_RISING);
                 enable_irq_wake(gpio_to_irq(fpc1020->irq_gpio));
 		fpc1020->compatible_enabled = 1;
 		if (of_property_read_bool(dev->of_node, "fpc,enable-on-boot")) {

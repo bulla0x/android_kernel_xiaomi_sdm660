@@ -52,6 +52,8 @@ int gf_parse_dts(struct gf_dev *gf_dev)
 	}
 	gpio_direction_input(gf_dev->irq_gpio);
 
+	return 0;
+
 err_irq:
 	devm_gpio_free(dev, gf_dev->reset_gpio);
 err_reset:
@@ -60,14 +62,15 @@ err_reset:
 
 void gf_cleanup(struct gf_dev *gf_dev)
 {
+	struct device *dev = &gf_dev->spi->dev;
 	pr_info("[info] %s\n", __func__);
 
 	if (gpio_is_valid(gf_dev->irq_gpio)) {
-		gpio_free(gf_dev->irq_gpio);
+		devm_gpio_free(dev, gf_dev->irq_gpio);
 		pr_info("remove irq_gpio success\n");
 	}
 	if (gpio_is_valid(gf_dev->reset_gpio)) {
-		gpio_free(gf_dev->reset_gpio);
+		devm_gpio_free(dev, gf_dev->reset_gpio);
 		pr_info("remove reset_gpio success\n");
 	}
 }

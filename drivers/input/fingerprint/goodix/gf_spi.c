@@ -58,7 +58,7 @@
 #define VER_MINOR   2
 #define PATCH_LEVEL 10
 
-#define WAKELOCK_HOLD_TIME 2000 /* in ms */
+#define WAKELOCK_HOLD_TIME 4000 /* in ms */
 
 #define GF_SPIDEV_NAME     "goodix,fingerprint"
 /*device name after register in charater*/
@@ -346,14 +346,16 @@ static int irq_setup(struct gf_dev *gf_dev)
 
 	gf_dev->irq = gf_irq_num(gf_dev);
 	status = request_threaded_irq(gf_dev->irq, NULL, gf_irq,
-			IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+			IRQF_TRIGGER_RISING | IRQF_ONESHOT | IRQF_NO_SUSPEND,
 			"gf", gf_dev);
 
 	if (status) {
 		pr_err("failed to request IRQ:%d\n", gf_dev->irq);
 		return status;
 	}
+	irq_set_irq_type(gf_dev->irq, IRQ_TYPE_EDGE_RISING);
 	enable_irq_wake(gf_dev->irq);
+	device_init_wakeup(&gf_dev->spi->dev, 1);
 	gf_dev->irq_enabled = 1;
 
 	return status;
@@ -362,8 +364,9 @@ static int irq_setup(struct gf_dev *gf_dev)
 static void irq_cleanup(struct gf_dev *gf_dev)
 {
 	gf_dev->irq_enabled = 0;
-	disable_irq(gf_dev->irq);
 	disable_irq_wake(gf_dev->irq);
+	device_init_wakeup(&gf_dev->spi->dev, 0);
+	disable_irq(gf_dev->irq);
 	free_irq(gf_dev->irq, gf_dev);
 }
 

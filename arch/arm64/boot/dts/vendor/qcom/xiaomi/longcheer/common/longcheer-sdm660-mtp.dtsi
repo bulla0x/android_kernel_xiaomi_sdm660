@@ -57,12 +57,15 @@
 	goodix_fp {
 		compatible = "goodix,fingerprint";
 		interrupt-parent = <&tlmm>;
-		interrupt = <72 0x0>;
+		interrupts = <72 0x1>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&msm_gpio_72>;
 		vcc_spi-supply = <&pm660l_l3>;
 		vcc_ana-supply = <&pm660l_l3>;
 		vdd_io-supply = <&pm660l_l3>;
 		fp-gpio-irq = <&tlmm 72 0x00>;
 		fp-gpio-reset = <&tlmm 20 0x00>;
+		qcom,wakeup-enable;
 		status = "okay";
 	};
 	
@@ -70,9 +73,9 @@
 		status = "ok";
 		compatible = "fpc,fpc1020";
 		interrupt-parent = <&tlmm>;
-		interrupts = <72 0x3>;
+		interrupts = <72 0x1>;
 		fpc,gpio_rst    = <&tlmm 20 0x1>;
-		fpc,gpio_irq    = <&tlmm 72 0x3>;
+		fpc,gpio_irq    = <&tlmm 72 0x1>;
 		vcc_spi-supply  = <&pm660_l13>;
 		vdd_io-supply   = <&pm660_l13>;
 		vdd_ana-supply  = <&pm660_l13>;
